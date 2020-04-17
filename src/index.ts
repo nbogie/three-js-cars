@@ -2,6 +2,7 @@ import {
   Scene,
   Color,
   Mesh,
+  Object3D,
   MeshNormalMaterial,
   BoxBufferGeometry,
   PerspectiveCamera,
@@ -9,9 +10,19 @@ import {
   OrthographicCamera,
   AmbientLight,
   PointLight,
+  Fog,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+
+class Car {
+  public object: Object3D;
+  public speed: number;
+  constructor(obj3d: Object3D) {
+    this.object = obj3d;
+    this.speed = 0.1 + Math.random() * 0.2;
+  }
+}
 
 class Main {
   /** The scene */
@@ -26,15 +37,16 @@ class Main {
   /** The orbit controls */
   public controls: OrbitControls;
 
-  /** The cube mesh */
-  public cube: Mesh;
+  public cars: Car[];
+
+  public lightPoint: PointLight;
 
   constructor() {
-    this.initViewport();
+    this.setupEverything();
   }
 
   /** Initialize the viewport */
-  public initViewport() {
+  public setupEverything() {
     // Init scene.
     this.scene = new Scene();
     this.scene.background = new Color("#191919");
@@ -42,7 +54,9 @@ class Main {
     // Init camera.
     const aspect = window.innerWidth / window.innerHeight;
     this.camera = new PerspectiveCamera(50, aspect, 1, 1000);
-    this.camera.position.z = 10;
+    this.camera.position.y = 10;
+    this.camera.position.z = 60;
+    this.camera.position.x = -6;
 
     // Init renderer.
     this.renderer = new WebGLRenderer({
@@ -52,7 +66,8 @@ class Main {
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.render(this.scene, this.camera);
-    // this.renderer.setAnimationLoop(() => this.animate()); // uncomment if you want to use the animation loop
+    // uncomment if you want to use the animation loop
+    this.renderer.setAnimationLoop(() => this.animate());
     document.body.appendChild(this.renderer.domElement);
     window.addEventListener("resize", () => this.onResize());
 
@@ -60,35 +75,35 @@ class Main {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.update();
     this.controls.addEventListener("change", () => this.render());
-    var that = this;
 
-    var loader = new GLTFLoader();
-    loader.crossOrigin = "true";
-    [1, 2, 3, 4]
-      .map((n) => `/car${n}.glb`)
-      .forEach((path, ix) =>
-        loader.load(path, function (data) {
-          var object = data.scene;
-          object.position.set(ix * 3, 0, 0);
-          that.scene.add(object);
-        })
-      );
-
-    var lightAmb = new AmbientLight(0x202020, 3);
+    //Add some lights
+    var lightAmb = new AmbientLight(0x202020, 6);
     lightAmb.position.set(30, -10, 30);
     this.scene.add(lightAmb);
 
-    var lightPoint = new PointLight(0xffffff, 3, 50);
-    lightPoint.position.set(4, 30, -20);
-    this.scene.add(lightPoint);
+    this.lightPoint = new PointLight(0xffffff, 3, 20);
+    this.lightPoint.position.set(4, 30, -20);
+    this.scene.add(this.lightPoint);
+    this.scene.fog = new Fog(0xff0000, 250, 1400);
 
-    // Add test mesh.
-    this.cube = this.createCubeMesh();
-    //this.scene.add(this.cube);
-    this.render();
+    //load the models, add them to the scene, remember them
+    this.cars = [];
+    var loader = new GLTFLoader();
+    loader.crossOrigin = "true";
+    [1, 2, 3, 4, 5, 6]
+      .map((n) => `/car${n}.glb`)
+      .forEach((path, ix) =>
+        loader.load(path, (data) => {
+          var object = data.scene;
+          object.position.set(-10 + ix * 4, 0, 0);
+          this.scene.add(object);
+          this.cars.push(new Car(object.children[0]));
+          this.render();
+        })
+      );
 
-    console.log(this);
-  }
+    this.render(); //want this only once the models have loaded
+  } //ends Main initViewport()
 
   /** Renders the scene */
   public render() {
@@ -97,10 +112,18 @@ class Main {
 
   /** Animates the scene */
   public animate() {
-    this.cube.rotation.x += 0.005;
-    this.cube.rotation.y += 0.001;
-
-    this.controls.update();
+    this.cars.forEach((car) => {
+      //car.object.rotation.y += 0.005;
+      car.object.position.z += car.speed;
+      if (car.object.position.z > 100) {
+        car.object.position.z -= 100;
+      }
+    });
+    if (this.cars.length > 0) {
+      this.camera.lookAt(this.cars[0].object.position);
+    }
+    //this.lightPoint.rotateZ(Math.random() * 100);
+    //    this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -112,14 +135,6 @@ class Main {
     }
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.render();
-  }
-
-  /** Creates a cube mesh */
-  public createCubeMesh() {
-    const geometry = new BoxBufferGeometry(200, 200, 200);
-    const material = new MeshNormalMaterial();
-    const mesh = new Mesh(geometry, material);
-    return mesh;
   }
 }
 
